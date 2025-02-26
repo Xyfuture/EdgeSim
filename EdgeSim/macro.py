@@ -1,8 +1,9 @@
 import math
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Optional
 
-from Desim.Core import SimModule
+from Desim.Core import SimModule,SimSession
 from Desim.memory.Memory import ChunkMemory, ChunkMemoryPort, ChunkPacket
 from Desim.module.FIFO import FIFO
 
@@ -31,6 +32,7 @@ class PIMMacro(SimModule):
 
         self.load_engine_command_queue = FIFO(10)
         self.compute_engine_command_queue = FIFO(10)
+        self.compute_engine_fifo_queue = FIFO(10)
 
         self.load_to_compute_fifo = FIFO(100)
 
@@ -67,9 +69,53 @@ class PIMMacro(SimModule):
 
 
     def compute_engine(self):
-        pass
+        while True:
+            current_command:ComputeCommand = self.compute_engine_command_queue.read()
+            output_fifo:FIFO = self.compute_engine_fifo_queue.read()
+
+            packet_buffer = []
+
+            src_chunk_num = current_command.src_chunk_num_dict[self.macro_id]
+            # 执行这一条指令
+            for out_index in range(current_command.dst_chunk_num):
+
+                for in_index in range(src_chunk_num):
+                    if out_index == 0:
+                        packet = self.load_to_compute_fifo.read()
+                        packet_buffer.append(packet)
+                    else:
+                        packet = packet_buffer[in_index]
+                    
+                    # 基础的计算周期数
+                    compute_cycle = current_command.chunk_size
+                         
+                    if in_index == src_chunk_num - 1:
+                        # 所有的元素都全部进入
+                        assert current_command.batch_size <= self.macro_config.sa_height
+                        compute_cycle += self.macro_config.sa_width + current_command.batch_size
+
+                        compute_cycle += 4 # 固定的merge acc 阶段的周期数
+                        compute_cycle += current_command.batch_size # 读出数据
+                        
+                    SimModule.wait_time(compute_cycle)
+                
+                # 计算完成一个 Chunk，将结果写入output fifo
+                assert current_command.chunk_size == self.macro_config.sa_width * self.macro_config.sa_number
+                output_fifo.write(ChunkPacket(
+                    None,
+                    current_command.chunk_size,
+                    current_command.batch_size,
+                    4
+                )) # 变成int32
 
 
+    def issue_compute_command(self,command:ComputeCommand,output_fifo:FIFO):
+        self.compute_engine_command_queue.write(command)
+        self.load_engine_command_queue.write(command)
+
+        self.compute_engine_fifo_queue.write(output_fifo)
+                    
+                
     @lru_cache(maxsize=10)
     def systolic_array_latency(self,input_size,weight_size):
 
@@ -130,4 +176,63 @@ class PIMMacro(SimModule):
 
 
 class PIMMacroManager(SimModule):
-    pass
+    def __init__(self):
+        super().__init__()
+        self.external_l3_memory:Optional[ChunkMemory] = None
+        self.compute_command_queue = FIFO(100)
+        
+        self.pim_macro_list:list[PIMMacro] = []
+
+        self.register_coroutine(self.process)
+
+
+    def process(self):
+        # 发射指令,注册reduce handler
+
+        while True:
+            if self.compute_command_queue.is_empty():
+                return
+            current_command:ComputeCommand = self.compute_command_queue.read()
+            # 解析并发射
+            output_fifo_list = []
+            for macro_id in current_command.macro_id:
+                pim_macro = self.pim_macro_list[macro_id]
+                output_fifo = FIFO(current_command.dst_chunk_num)
+                output_fifo_list.append(output_fifo)
+                pim_macro.issue_compute_command(current_command,output_fifo)
+
+            # 配置 reduce handler
+            reduce_handler = self.reduce_helper(output_fifo_list,current_command)
+            SimSession.scheduler.dynamic_add_coroutine(reduce_handler)
+
+                
+
+
+
+    def reduce_helper(self,fifo_list:list[FIFO],commnad:ComputeCommand):
+        def reduce_handler():
+            output_chunk_num = commnad.dst_chunk_num
+            dst = commnad.dst
+            for i in range(output_chunk_num):
+                # 进行 reduce 操作
+                for fifo in fifo_list:
+                    packet:ChunkPacket = fifo.read()
+                l3_memory_write_port.write(
+                    dst+i,
+                    None,
+                    True,
+                    commnad.chunk_size,
+                    commnad.batch_size,
+                    packet.element_bytes
+                )
+                    
+        l3_memory_write_port = ChunkMemoryPort()
+        l3_memory_write_port.config_chunk_memory(self.external_l3_memory)
+        assert len(fifo_list) == len(commnad.macro_id)
+
+
+        return reduce_handler
+    
+
+    def config_connection(self,external_l3_memory:ChunkMemory):
+        self.external_l3_memory = external_l3_memory
