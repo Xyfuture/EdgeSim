@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from Desim.Core import SimModule,SimSession
+from Desim.Core import SimModule, SimSession, SimCoroutine, SimTime
 from Desim.memory.Memory import ChunkMemory, ChunkMemoryPort, ChunkPacket
 from Desim.module.FIFO import FIFO
 
-from EdgeSim.commands import ComputeCommand
+from EdgeSim.Commands import ComputeCommand
 
 
 @dataclass
@@ -27,7 +27,6 @@ class PIMMacro(SimModule):
         self.macro_id = macro_id
 
         self.l3_memory_read_port = ChunkMemoryPort()
-
         self.external_l3_memory = ChunkMemory()
 
         self.load_engine_command_queue = FIFO(10)
@@ -45,6 +44,12 @@ class PIMMacro(SimModule):
 
     def process(self):
         pass
+
+    def config_connection(self,external_l3_memory:ChunkMemory):
+        self.external_l3_memory = external_l3_memory
+        self.l3_memory_read_port.config_chunk_memory(self.external_l3_memory)
+
+
 
 
 
@@ -67,6 +72,8 @@ class PIMMacro(SimModule):
 
                 self.load_to_compute_fifo.write(packet)
 
+                if self.macro_id == 0:
+                    print(f"load {i}   time {SimSession.sim_time}")
 
     def compute_engine(self):
         while True:
@@ -96,8 +103,10 @@ class PIMMacro(SimModule):
 
                         compute_cycle += 4 # 固定的merge acc 阶段的周期数
                         compute_cycle += current_command.batch_size # 读出数据
-                        
-                    SimModule.wait_time(compute_cycle)
+
+                    # if self.macro_id == 0 :
+                    #     print(f"output chunk num {out_index}  input chunk num {in_index}  time->{SimSession.sim_time}  cycle->{compute_cycle}")
+                    SimModule.wait_time(SimTime(compute_cycle))
                 
                 # 计算完成一个 Chunk，将结果写入output fifo
                 assert current_command.chunk_size == self.macro_config.sa_width * self.macro_config.sa_number
@@ -179,9 +188,16 @@ class PIMMacroManager(SimModule):
     def __init__(self):
         super().__init__()
         self.external_l3_memory:Optional[ChunkMemory] = None
-        self.compute_command_queue = FIFO(100)
+        self.compute_command_queue:Optional[FIFO] = None
         
         self.pim_macro_list:list[PIMMacro] = []
+
+        # 默认暂时有16个 macro
+        for i in range(16):
+            self.pim_macro_list.append(PIMMacro(i))
+
+
+
 
         self.register_coroutine(self.process)
 
@@ -203,16 +219,16 @@ class PIMMacroManager(SimModule):
 
             # 配置 reduce handler
             reduce_handler = self.reduce_helper(output_fifo_list,current_command)
-            SimSession.scheduler.dynamic_add_coroutine(reduce_handler)
+            SimSession.scheduler.dynamic_add_coroutine(SimCoroutine(reduce_handler))
 
                 
 
 
 
-    def reduce_helper(self,fifo_list:list[FIFO],commnad:ComputeCommand):
+    def reduce_helper(self, fifo_list:list[FIFO], command:ComputeCommand):
         def reduce_handler():
-            output_chunk_num = commnad.dst_chunk_num
-            dst = commnad.dst
+            output_chunk_num = command.dst_chunk_num
+            dst = command.dst
             for i in range(output_chunk_num):
                 # 进行 reduce 操作
                 for fifo in fifo_list:
@@ -221,14 +237,14 @@ class PIMMacroManager(SimModule):
                     dst+i,
                     None,
                     True,
-                    commnad.chunk_size,
-                    commnad.batch_size,
+                    command.chunk_size,
+                    command.batch_size,
                     packet.element_bytes
                 )
                     
         l3_memory_write_port = ChunkMemoryPort()
         l3_memory_write_port.config_chunk_memory(self.external_l3_memory)
-        assert len(fifo_list) == len(commnad.macro_id)
+        assert len(fifo_list) == len(command.macro_id)
 
 
         return reduce_handler
@@ -236,3 +252,11 @@ class PIMMacroManager(SimModule):
 
     def config_connection(self,external_l3_memory:ChunkMemory):
         self.external_l3_memory = external_l3_memory
+
+        for macro in self.pim_macro_list:
+            macro.config_connection(external_l3_memory)
+
+
+    def load_command(self, command_list:list[ComputeCommand]):
+        command_size = len(command_list)
+        self.compute_command_queue = FIFO(command_size,command_size,command_list)
