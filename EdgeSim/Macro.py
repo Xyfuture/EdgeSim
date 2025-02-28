@@ -72,7 +72,7 @@ class PIMMacro(SimModule):
 
                 self.load_to_compute_fifo.write(packet)
 
-                if self.macro_id == 0:
+                if self.macro_id == 8:
                     print(f"load {i}   time {SimSession.sim_time}")
 
     def compute_engine(self):
@@ -233,6 +233,7 @@ class PIMMacroManager(SimModule):
                 # 进行 reduce 操作
                 for fifo in fifo_list:
                     packet:ChunkPacket = fifo.read()
+
                 l3_memory_write_port.write(
                     dst+i,
                     None,

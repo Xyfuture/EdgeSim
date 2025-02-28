@@ -260,7 +260,7 @@ if __name__ == "__main__":
     )
 
 
-    for  i in range(8):
+    for  i in range(16):
         for chiplet in chiplet_list:
             chiplet.l3_memory.direct_write(100+i,i,True,num_elements=128,num_batch_size=1,element_bytes=1)
 

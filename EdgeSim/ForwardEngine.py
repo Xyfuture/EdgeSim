@@ -128,7 +128,7 @@ class ForwardEngine(SimModule):
             for i in range(command.chunk_num):
                 chunk_packet = input_fifo.read()
                 # 直接写入 量化之后的
-                l3_memory_write_port.write(chunk_packet.data,command.memory_dst+i,True,chunk_packet.chunk_size,chunk_packet.batch_size,1)
+                l3_memory_write_port.write(command.memory_dst+i,chunk_packet.payload,True,chunk_packet.num_elements,chunk_packet.batch_size,1)
 
                 SimModule.wait_time(SimTime(1))
             return False
@@ -141,7 +141,7 @@ class ForwardEngine(SimModule):
             if not command.fifo_src_flag:
                 return False
 
-            assert command.fifo_src in [1,2]
+            assert command.fifo_src in [3,4]
 
             for i in range(command.chunk_num):
                 chunk_packet = self.external_fifo_dict[command.fifo_src].read()
@@ -163,7 +163,7 @@ class ForwardEngine(SimModule):
             if not command.fifo_dst_flag:
                 return False
 
-            assert command.fifo_dst in [3,4]
+            assert command.fifo_dst in [1,2 ]
 
             for i in range(command.chunk_num):
                 chunk_packet = input_fifo_map['reduce_to_fifo'].read()
