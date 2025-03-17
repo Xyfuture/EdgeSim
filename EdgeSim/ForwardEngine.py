@@ -91,7 +91,7 @@ class ForwardEngine(SimModule):
 
     def l3_read_dma_helper(self,command:ForwardCommand):
         def l3_read_dma_handler(input_fifo_map:PipeArg,output_fifo_map:PipeArg)->bool:
-            if not command.memory_src_flag:
+            if not command.memory_reduce_src_flag:
                 return False
 
             l3_memory_read_port = ChunkMemoryPort()
@@ -99,7 +99,7 @@ class ForwardEngine(SimModule):
 
 
             for i in range(command.chunk_num):
-                data = l3_memory_read_port.read(command.memory_src+i,1,False,command.chunk_size,command.batch_size,4)
+                data = l3_memory_read_port.read(command.memory_reduce_src + i, 1, False, command.chunk_size, command.batch_size, 4)
 
                 for fifo_name, fifo in output_fifo_map.items():
                     fifo.write(ChunkPacket(
@@ -179,7 +179,7 @@ class ForwardEngine(SimModule):
         def reduce_handler(input_fifo_map:PipeArg,output_fifo_map:PipeArg)->bool:
             if command.reduce:
                 # 必然是两个 read 过来
-                assert command.memory_src_flag and command.fifo_src_flag
+                assert command.memory_reduce_src_flag and command.fifo_src_flag
 
                 for i in range(command.chunk_num):
                     chunk_packet_1:ChunkPacket = input_fifo_map['memory_to_reduce'].read()
@@ -201,9 +201,9 @@ class ForwardEngine(SimModule):
                         output_fifo_map['reduce_to_fifo'].write(output_chunk_packet)
             else:
                 # 需要进行 bypass 操作
-                assert command.fifo_src_flag ^ command.memory_src_flag
+                assert command.fifo_src_flag ^ command.memory_reduce_src_flag
 
-                if command.memory_src_flag:
+                if command.memory_reduce_src_flag:
                     input_fifo = input_fifo_map['memory_to_reduce']
                 if command.fifo_src_flag:
                     input_fifo = input_fifo_map['fifo_to_reduce']

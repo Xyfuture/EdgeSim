@@ -128,8 +128,8 @@ def gen_forward_command_list(compute_dst_base:int,next_src_base:int,top:bool,lef
             fifo_dst_flag=True,
             fifo_dst=1,
 
-            memory_src_flag=True,
-            memory_src=part_src,
+            memory_reduce_src_flag=True,
+            memory_reduce_src=part_src,
 
             fifo_src_flag=False,
             fifo_src=-1,
@@ -158,8 +158,8 @@ def gen_forward_command_list(compute_dst_base:int,next_src_base:int,top:bool,lef
             fifo_dst_flag=False,
             fifo_dst=-1,
 
-            memory_src_flag=False,
-            memory_src=-1,
+            memory_reduce_src_flag=False,
+            memory_reduce_src=-1,
             fifo_src_flag=True,
             fifo_src=4,
 
@@ -194,8 +194,8 @@ def gen_forward_command_list(compute_dst_base:int,next_src_base:int,top:bool,lef
             fifo_dst_flag=True,
             fifo_dst=2,
 
-            memory_src_flag=True,
-            memory_src=reduce_memory_src,
+            memory_reduce_src_flag=True,
+            memory_reduce_src=reduce_memory_src,
             fifo_src_flag=True,
             fifo_src=3,
 
