@@ -211,7 +211,7 @@ class PIMMacroManager(SimModule):
             current_command:ComputeCommand = self.compute_command_queue.read()
             # 解析并发射
             output_fifo_list = []
-            for macro_id in current_command.macro_id:
+            for macro_id in current_command.unit_id:
                 pim_macro = self.pim_macro_list[macro_id]
                 output_fifo = FIFO(current_command.dst_chunk_num)
                 output_fifo_list.append(output_fifo)
@@ -219,7 +219,7 @@ class PIMMacroManager(SimModule):
 
             # 配置 reduce handler
             reduce_handler = self.reduce_helper(output_fifo_list,current_command)
-            SimSession.scheduler.dynamic_add_coroutine(SimCoroutine(reduce_handler))
+            SimSession.scheduler.add_coroutine(SimCoroutine(reduce_handler))
 
                 
 
@@ -245,7 +245,7 @@ class PIMMacroManager(SimModule):
                     
         l3_memory_write_port = ChunkMemoryPort()
         l3_memory_write_port.config_chunk_memory(self.external_l3_memory)
-        assert len(fifo_list) == len(command.macro_id)
+        assert len(fifo_list) == len(command.unit_id)
 
 
         return reduce_handler

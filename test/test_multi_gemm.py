@@ -15,7 +15,7 @@ def gen_compute_command_list():
                 opcode='compute',
                 batch_size=1,
                 chunk_size=128,
-                macro_id=[macro_id, macro_id+8],
+                unit_id=[macro_id, macro_id + 8],
 
                 dst = 200 + macro_id,
                 dst_chunk_num=1,
@@ -38,7 +38,7 @@ def gen_compute_command_list():
                 batch_size=1,
                 chunk_size=128,
 
-                macro_id=[macro_id,macro_id+8],
+                unit_id=[macro_id, macro_id + 8],
 
                 dst = 250 + macro_id,
                 dst_chunk_num=1,
@@ -63,7 +63,7 @@ def gen_compute_command_list():
                 batch_size=1,
                 chunk_size=128,
 
-                macro_id=[macro_id,macro_id+8],
+                unit_id=[macro_id, macro_id + 8],
 
                 dst = 400 + macro_id,
                 dst_chunk_num=1,
@@ -86,7 +86,7 @@ def gen_compute_command_list():
                 batch_size=1,
                 chunk_size=128,
 
-                macro_id=[macro_id,macro_id+8],
+                unit_id=[macro_id, macro_id + 8],
 
                 dst = 450 + macro_id,
                 dst_chunk_num=1,

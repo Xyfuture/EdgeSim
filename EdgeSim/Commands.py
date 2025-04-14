@@ -9,7 +9,7 @@ class ComputeCommand:
 
     chunk_size:int = -1
 
-    macro_id:list[int] = field(default_factory=list)
+    unit_id:list[int] = field(default_factory=list)
 
     dst:int = -1
     dst_chunk_num:int = -1
@@ -23,7 +23,7 @@ class RRAMComputeCommand(ComputeCommand):
     batch_size:int = -1
     chunk_size:int = -1
 
-    macro_id:list[int] = field(default=list)
+    unit_id:list[int] = field(default=list)
 
     dst:int = -1
     dst_chunk_num:int = -1

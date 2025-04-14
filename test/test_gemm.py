@@ -15,7 +15,7 @@ def gen_compute_command():
             opcode = 'Compute',
             batch_size=1,
             chunk_size=128,
-            macro_id=[macro_id],
+            unit_id=[macro_id],
 
             dst = 200 + macro_id,
             dst_chunk_num= 1 ,
@@ -31,7 +31,7 @@ def gen_compute_command():
             opcode='Compute',
             batch_size=1,
             chunk_size=128,
-            macro_id=[macro_id],
+            unit_id=[macro_id],
 
             dst = 300 + macro_id,
             dst_chunk_num= 1 ,

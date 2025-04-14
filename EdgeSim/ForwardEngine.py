@@ -14,6 +14,9 @@ PipeArg:TypeAlias = Optional[dict[str,FIFO]]
 
 
 
+
+
+
 class ForwardEngine(SimModule):
     def __init__(self):
         super().__init__()
@@ -50,8 +53,16 @@ class ForwardEngine(SimModule):
             pipe_graph = PipeGraph()
             # 直接按照统一的方式构建，然后在stage内部判断具体的执行情况
 
-            memory_read_stage = PipeStage.dynamic_create(
-                self.l3_read_dma_helper(current_command)
+            memory_read_reduce_stage = PipeStage.dynamic_create(
+                self.l3_read_dma_helper(current_command,current_command.memory_reduce_src_flag,current_command.memory_reduce_src)
+            )
+
+            memory_read_add_stage = PipeStage.dynamic_create(
+                self.l3_read_dma_helper(current_command,current_command.memory_add_src_flag,current_command.memory_add_src)
+            )
+
+            memory_read_mul_stage = PipeStage.dynamic_create(
+                self.l3_read_dma_helper(current_command,current_command.memory_mul_src_flag,current_command.memory_mul_src)
             )
 
             fifo_read_stage = PipeStage.dynamic_create(
@@ -60,6 +71,14 @@ class ForwardEngine(SimModule):
 
             reduce_stage = PipeStage.dynamic_create(
                 self.reduce_helper(current_command)
+            )
+
+            add_stage = PipeStage.dynamic_create(
+                self.add_helper(current_command)
+            )
+
+            mul_stage = PipeStage.dynamic_create(
+                self.mul_helper(current_command)
             )
 
             memory_write_stage = PipeStage.dynamic_create(
@@ -71,27 +90,45 @@ class ForwardEngine(SimModule):
             )
 
 
-            pipe_graph.add_stage(memory_read_stage,'memory_read_stage')
+            pipe_graph.add_stage(memory_read_reduce_stage,'memory_read_reduce_stage')
+            pipe_graph.add_stage(memory_read_add_stage,'memory_read_add_stage')
+            pipe_graph.add_stage(memory_read_mul_stage,'memory_read_mul_stage')
+
+
             pipe_graph.add_stage(fifo_read_stage,'fifo_read_stage')
             pipe_graph.add_stage(reduce_stage,'reduce_stage')
+            pipe_graph.add_stage(add_stage,'add_stage')
+            pipe_graph.add_stage(mul_stage,'mul_stage')
+
             pipe_graph.add_stage(memory_write_stage,'memory_write_stage')
             pipe_graph.add_stage(fifo_write_stage,'fifo_write_stage')
 
-            pipe_graph.add_edge('memory_read_stage','reduce_stage','memory_to_reduce',10,0)
+            pipe_graph.add_edge('memory_read_reduce_stage','reduce_stage','memory_to_reduce',10,0)
+            pipe_graph.add_edge('memory_read_add_stage','add_stage','memory_to_add',10,0)
+            pipe_graph.add_edge('memory_read_mul_stage','mul_stage','memory_to_mul',10,0)
+
             pipe_graph.add_edge('fifo_read_stage','reduce_stage','fifo_to_reduce',10,0)
-            pipe_graph.add_edge('reduce_stage','memory_write_stage','reduce_to_memory',10,0)
-            pipe_graph.add_edge('reduce_stage','fifo_write_stage','reduce_to_fifo',10,0)
+
+            pipe_graph.add_edge('reduce_stage','add_stage','reduce_to_add',10,0)
+            pipe_graph.add_edge('add_stage','mul_stage','add_to_edge',10,0)
+            pipe_graph.add_edge('mul_stage','memory_write_stage','mul_to_memory',10,0)
+            pipe_graph.add_edge('mul_stage','fifo_write_stage','mul_to_fifo',10,0)
+
 
             pipe_graph.build_graph()
+            pipe_graph.config_sink_stage_names(['memory_write_stage','fifo_write_stage'])
+
             pipe_graph.start_pipe_graph()
 
             SimModule.wait_time(SimTime(1))
+            pipe_graph.wait_pipe_graph_finish() # 等待结束
 
 
 
-    def l3_read_dma_helper(self,command:ForwardCommand):
+    def l3_read_dma_helper(self,command:ForwardCommand,read_flag:bool,read_addr:int):
+        # 用于所有的读取操作, reduce,add和mul
         def l3_read_dma_handler(input_fifo_map:PipeArg,output_fifo_map:PipeArg)->bool:
-            if not command.memory_reduce_src_flag:
+            if not read_flag:
                 return False
 
             l3_memory_read_port = ChunkMemoryPort()
@@ -99,7 +136,7 @@ class ForwardEngine(SimModule):
 
 
             for i in range(command.chunk_num):
-                data = l3_memory_read_port.read(command.memory_reduce_src + i, 1, False, command.chunk_size, command.batch_size, 4)
+                data = l3_memory_read_port.read(read_addr + i, 1, False, command.chunk_size, command.batch_size, 4)
 
                 for fifo_name, fifo in output_fifo_map.items():
                     fifo.write(ChunkPacket(
@@ -124,7 +161,10 @@ class ForwardEngine(SimModule):
             l3_memory_write_port = ChunkMemoryPort()
             l3_memory_write_port.config_chunk_memory(self.external_l3_memory)
 
-            input_fifo = input_fifo_map['reduce_to_memory']
+
+            assert len(input_fifo_map) == 1
+            input_fifo = list(input_fifo_map.values())[0]  # 假设只有一个fifo 会向这个流水级发送数据
+            # input_fifo = input_fifo_map['reduce_to_memory']
             for i in range(command.chunk_num):
                 chunk_packet = input_fifo.read()
                 # 直接写入 量化之后的
@@ -219,6 +259,69 @@ class ForwardEngine(SimModule):
             return False
 
         return reduce_handler
+
+
+    def mul_helper(self,command:ForwardCommand):
+        def mul_handler(input_fifo_map:PipeArg,output_fifo_map:PipeArg)->bool:
+            add_input_fifo = input_fifo_map['add_to_mul']
+
+
+            if command.mul:
+                memory_input_fifo = input_fifo_map['memory_to_mul']
+
+                for i in range(command.chunk_num):
+                    add_packet = add_input_fifo.read()
+                    memory_packet = memory_input_fifo.read()
+                    # wait latency
+                    mul_latency = 10
+                    SimModule.wait_time(SimTime(mul_latency))
+
+                    for output_fifo in output_fifo_map.values():
+                        output_fifo.write(ChunkPacket(
+                            payload=None,
+                            num_elements=command.chunk_size,
+                            batch_size=command.batch_size,
+                            element_bytes=2
+                        ))
+
+            else:
+                for i in range(command.chunk_num):
+                    chunk_packet = add_input_fifo.read()
+                    for output_fifo in output_fifo_map.values():
+                        output_fifo.write(chunk_packet)
+            return False
+
+        return mul_handler
+
+    def add_helper(self,command:ForwardCommand):
+        def add_handler(input_fifo_map:PipeArg,output_fifo_map:PipeArg)->bool:
+            reduce_input_fifo = input_fifo_map['reduce_to_add']
+
+            if command.add:
+                memory_input_fifo = input_fifo_map['memory_to_add']
+                for i in range(command.chunk_num):
+                    reduce_packet = reduce_input_fifo.read()
+                    memory_packet = memory_input_fifo.read()
+
+                    add_latency = 10
+                    SimModule.wait_time(SimTime(add_latency))
+
+                    for output_fifo in output_fifo_map.values():
+                        output_fifo.write(ChunkPacket(
+                            payload=None,
+                            num_elements=command.chunk_size,
+                            batch_size=command.batch_size,
+                            element_bytes=2
+                        ))
+            else:
+                for i in range(command.chunk_num):
+                    chunk_packet = reduce_input_fifo.read()
+                    for output_fifo in output_fifo_map.values():
+                        output_fifo.write(chunk_packet)
+
+            return False
+
+        return add_handler
 
 
     def config_connection(self,l3_memory:ChunkMemory,fifo_dict:dict[int,FIFO]):
