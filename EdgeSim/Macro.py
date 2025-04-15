@@ -61,7 +61,7 @@ class PIMMacro(SimModule):
             src_addr = current_command.src_dict[self.macro_id]
             src_chunk_num = current_command.src_chunk_num_dict[self.macro_id]
             for i in range(src_chunk_num):
-                data = self.l3_memory_read_port.read(src_addr,1,False,
+                data = self.l3_memory_read_port.read(src_addr+i,1,False,
                                                      current_command.chunk_size,current_command.batch_size,1)
                 packet = ChunkPacket(
                     data,

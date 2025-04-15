@@ -86,9 +86,46 @@ class ForwardCommand:
 
 
 
+# @dataclass
+# class VectorCommand:
+#     opcode:str = ''
+#
+#     batch_size:int = -1
+#     chunk_size:int = -1
+#
+#     dst:int = -1
+#     dst_chunk_num:int = -1
+#
+#     src_chunk_num:int =-1
+#     src_0:int = -1 # 对应 silu 的线
+#     src_1:int = -1
+#
+#     silu:bool = False
+#     mul:bool = False
+
+
 @dataclass
 class VectorCommand:
     opcode:str = ''
+
+    # batch_size:int = -1
+    # chunk_size:int = -1
+    #
+    # dst:int = -1
+    # dst_chunk_num:int = -1
+    #
+    # src_chunk_num:int =-1
+    # src_0:int = -1 # 对应 silu 的线
+    # src_1:int = -1
+    #
+    # silu:bool = False
+    # mul:bool = False
+
+
+
+@dataclass
+class FFNCommand(VectorCommand):
+    # opcode:str = ''
 
     batch_size:int = -1
     chunk_size:int = -1
@@ -97,8 +134,8 @@ class VectorCommand:
     dst_chunk_num:int = -1
 
     src_chunk_num:int =-1
-    src_0:int = -1 # 对应 silu 的线
-    src_1:int = -1
+    src_activation:int = -1 # 对应 silu 操作的地址
+    src_mul:int = -1 # 如果是-1 就不启用
 
-    silu:bool = False
+    activation:bool = False
     mul:bool = False
