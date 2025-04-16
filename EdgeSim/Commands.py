@@ -139,3 +139,18 @@ class FFNCommand(VectorCommand):
 
     activation:bool = False
     mul:bool = False
+
+
+@dataclass
+class SoftmaxCommand(VectorCommand):
+    # opcode:str = ''
+
+    # 最单纯的softmax, 一个src, 一个dst, 但是不太能做重叠
+
+    batch_size:int = -1
+    chunk_size:int = -1
+    chunk_num:int = -1
+
+    dst:int = -1
+
+    src:int = -1
