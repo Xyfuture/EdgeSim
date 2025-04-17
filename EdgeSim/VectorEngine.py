@@ -26,11 +26,11 @@ class FFNEngine(SimModule):
         self.mul_to_store_fifo = FIFO(100)
 
 
-        self.load_activation_command_queue:FIFO[FFNCommand] = FIFO(100)
-        self.load_mul_command_queue:FIFO[FFNCommand] = FIFO(100)
-        self.store_command_queue:FIFO[FFNCommand] = FIFO(100)
-        self.mul_command_queue:FIFO[FFNCommand] = FIFO(100)
-        self.activation_command_queue:FIFO[FFNCommand] = FIFO(100)
+        self.load_activation_command_queue:FIFO[FFNCommand] = FIFO(1)
+        self.load_mul_command_queue:FIFO[FFNCommand] = FIFO(1)
+        self.store_command_queue:FIFO[FFNCommand] = FIFO(1)
+        self.mul_command_queue:FIFO[FFNCommand] = FIFO(1)
+        self.activation_command_queue:FIFO[FFNCommand] = FIFO(1)
 
 
         self.register_coroutine(self.load_activation_engine)
@@ -40,7 +40,7 @@ class FFNEngine(SimModule):
         self.register_coroutine(self.activation_engine)
 
 
-    def load_command(self,command:FFNCommand):
+    def issue_command(self, command:FFNCommand):
         assert isinstance(command,FFNCommand)
 
         # 需要把command的长度设置为1, 这样就能限制每次只读取一条指令了
@@ -197,6 +197,8 @@ class FFNEngine(SimModule):
 
                 SimModule.wait_time(SimTime(1))
 
+    def config_connection(self,l3_memory:ChunkMemory):
+        self.external_l3_memory = l3_memory
 
 
 class SoftmaxEngine(SimModule):
@@ -206,9 +208,9 @@ class SoftmaxEngine(SimModule):
         self.external_l3_memory:Optional[ChunkMemory] = None
 
 
-        self.load_command_queue:FIFO[SoftmaxCommand] = FIFO(100)
-        self.softmax_compute_command_queue:FIFO[SoftmaxCommand] = FIFO(100)
-        self.store_command_queue:FIFO[SoftmaxCommand] = FIFO(100)
+        self.load_command_queue:FIFO[SoftmaxCommand] = FIFO(1)
+        self.softmax_compute_command_queue:FIFO[SoftmaxCommand] = FIFO(1)
+        self.store_command_queue:FIFO[SoftmaxCommand] = FIFO(1)
 
         self.load_to_compute_fifo = FIFO(100)
         self.compute_to_store_fifo = FIFO(100)
@@ -219,7 +221,7 @@ class SoftmaxEngine(SimModule):
         self.register_coroutine(self.store_engine)
 
 
-    def load_command(self,command:SoftmaxCommand):
+    def issue_command(self, command:SoftmaxCommand):
 
         assert isinstance(command,SoftmaxCommand)
 
@@ -300,7 +302,8 @@ class SoftmaxEngine(SimModule):
 
                 SimModule.wait_time(SimTime(1))
 
-
+    def config_connection(self,l3_memory:ChunkMemory):
+        self.external_l3_memory = l3_memory
 
 
 
@@ -320,6 +323,8 @@ class VectorEngine(SimModule):
 
 
 
+
+
     def process(self):
         while True:
             if self.command_queue.is_empty():
@@ -328,13 +333,22 @@ class VectorEngine(SimModule):
             current_command = self.command_queue.read()
 
             if isinstance(current_command,FFNCommand):
-                self.ffn_engine.load_command(current_command)
+                self.ffn_engine.issue_command(current_command)
             elif isinstance(current_command,SoftmaxCommand):
-                self.softmax_engine.load_command(current_command)
+                self.softmax_engine.issue_command(current_command)
             else:
                 raise ValueError
 
 
+    def load_commands(self, command_list:list[VectorCommand]):
+        command_size = len(command_list)
 
+        self.command_queue = FIFO(command_size,command_size,command_list)
+
+
+    def config_connection(self,l3_memory:ChunkMemory):
+
+        self.softmax_engine.config_connection(l3_memory)
+        self.ffn_engine.config_connection(l3_memory)
 
 
