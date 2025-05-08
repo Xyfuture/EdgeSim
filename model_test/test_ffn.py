@@ -83,7 +83,7 @@ if __name__ == '__main__':
     compute_command_list = gen_compute_command()
     vector_command_list = gen_vector_command()
 
-    chiplet.load_commands(compute_command_list,gen_vector_command())
+    chiplet.load_commands(compute_command_list,vector_command_list)
 
     chiplet.config_connection()
 
