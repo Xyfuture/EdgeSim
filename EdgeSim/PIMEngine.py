@@ -7,8 +7,9 @@ from Desim.Core import SimModule, SimSession, SimCoroutine, SimTime
 from Desim.Sync import SimSemaphore
 from Desim.memory.Memory import ChunkMemory, ChunkMemoryPort, ChunkPacket
 from Desim.module.FIFO import FIFO
+from IPython.terminal.shortcuts.filters import PassThrough
 
-from EdgeSim.Commands import ComputeCommand
+from EdgeSim.Commands import ComputeCommand, AttenComputeCommand
 
 
 @dataclass
@@ -16,10 +17,21 @@ class PIMEngineConfig:
     num_pim_unit:int = 16
 
 
+@dataclass
+class PIMUnitConfig:
+    sa_rows:int = 4
+    sa_cols:int = 128
+
+    rram_bandwidth = 128
+    dram_bandwidth = 300
+
+
 
 class PIMUnit(SimModule):
     def __init__(self,unit_id:int = -1):
         super().__init__()
+
+        self.pim_unit_config = PIMUnitConfig()
 
         self.load_fifo:FIFO = FIFO(100)
         self.store_fifo:FIFO = FIFO(100)
@@ -76,26 +88,71 @@ class PIMUnit(SimModule):
         while True:
             command:ComputeCommand = self.compute_engine_command_queue.read()
 
-            for i in range(command.dst_chunk_num):
-                for j in range(command.src_chunk_num_dict[self.unit_id]):
-                    if i == 0 :
-                        chunk_packet = self.quantize_to_compute_fifo.read()
+            # 这里需要进行一个拆分, compute 和 atten compute 需要拆分开
 
-                    # 假设运算时间
-                    SimModule.wait_time(SimTime(100))
+            if isinstance(command,ComputeCommand):
+                for i in range(command.dst_chunk_num):
+                    for j in range(command.src_chunk_num_dict[self.unit_id]):
+                        if i == 0 :
+                            chunk_packet = self.quantize_to_compute_fifo.read()
 
-                # 运算完一个块
-                self.compute_to_dequantize_fifo.write(
-                    ChunkPacket(
-                        None,
-                        command.chunk_size,
-                        command.batch_size,
-                        4
+
+                        input_size = (command.batch_size,command.chunk_size)
+                        matrix_size = (command.chunk_size,command.chunk_size)
+
+                        last_time = False
+                        if j == command.src_chunk_num_dict[self.unit_id] - 1:
+                            last_time = True
+
+                        memory_bandwidth = self.pim_unit_config.rram_bandwidth
+
+                        latency = self.calc_execution_time(input_size,matrix_size,memory_bandwidth,last_time)
+
+                        SimModule.wait_time(SimTime(latency))
+
+                    # 运算完一个块
+                    self.compute_to_dequantize_fifo.write(
+                        ChunkPacket(
+                            None,
+                            command.chunk_size,
+                            command.batch_size,
+                            4
+                        )
                     )
-                )
 
-                print(f"PIM Unit {self.unit_id} compute at dst{i}")
+                    print(f"PIM Unit {self.unit_id} compute at dst{i}")
+            elif isinstance(command, AttenComputeCommand):
+                # 针对 attention 计算的部分
 
+                for i in range(command.dst_chunk_num):
+                    for j in range(command.src_chunk_num_dict[self.unit_id]):
+                        if i == 0:
+                            chunk_packet = self.quantize_to_compute_fifo.read()
+
+                        input_size = (command.batch_size, command.chunk_size)
+                        matrix_size = (command.chunk_size, command.chunk_size)
+
+                        last_time = False
+                        if j == command.src_chunk_num_dict[self.unit_id] - 1:
+                            last_time = True
+
+                        memory_bandwidth = int((command.running_head / command.total_head) * self.pim_unit_config.dram_bandwidth)
+
+                        latency = self.calc_execution_time(input_size, matrix_size,memory_bandwidth , last_time)
+
+                        SimModule.wait_time(SimTime(latency))
+
+                    # 运算完一个块
+                    self.compute_to_dequantize_fifo.write(
+                        ChunkPacket(
+                            None,
+                            command.chunk_size,
+                            command.batch_size,
+                            4
+                        )
+                    )
+
+                    print(f"PIM Unit {self.unit_id} compute at dst{i}")
 
 
 
@@ -118,8 +175,35 @@ class PIMUnit(SimModule):
                 )
 
 
-    def calc_compute_time(self):
-        pass
+    def calc_execution_time(self, input_size:tuple[int,int], matrix_size:tuple[int,int], memory_bandwidth:int,last_time:bool=False):
+        # 计算执行矩阵操作的执行时间 直接按照output stationary的方式进行
+
+        # 取 计算时间和memory时间比较长的那一个
+
+        # sa_compute_latency = 0
+        # sa_memory_latency = 0
+
+
+        sa_rows,sa_cols = self.pim_unit_config.sa_rows,self.pim_unit_config.sa_cols
+
+
+        # 模拟纯粹的计算延迟
+        assert input_size[0] <= self.pim_unit_config.sa_rows
+        assert input_size[1] == matrix_size[0]
+
+        if not last_time:
+            sa_compute_latency = input_size[1]
+            sa_memory_latency = matrix_size[0] * matrix_size[1] // memory_bandwidth
+        else:
+            sa_compute_latency = input_size[1] + sa_cols + sa_rows
+            sa_memory_latency = matrix_size[0] * matrix_size[1] // memory_bandwidth
+
+        return max(sa_compute_latency,sa_memory_latency)
+
+
+
+
+
 
 
 

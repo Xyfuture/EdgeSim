@@ -19,6 +19,21 @@ class ComputeCommand:
 
 
 @dataclass
+class AttenComputeCommand(ComputeCommand):
+    opcode:str = 'AttenCompute'
+
+    # 下面这些内容应该是同上的
+    # batch size | chunk size | unit id | dst | dst_chunk_num | src_dict | src_chunk_num_dict
+
+    # 下面这些是为了支持 attention 新增的
+
+    running_head:int = -1
+    total_head:int = -1
+    head_id:int = -1
+
+
+
+@dataclass
 class RRAMComputeCommand(ComputeCommand):
     batch_size:int = -1
     chunk_size:int = -1

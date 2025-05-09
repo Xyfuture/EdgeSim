@@ -271,7 +271,7 @@ class SoftmaxEngine(SimModule):
             SimModule.wait_time(SimTime(1))
 
             for i in range(command.chunk_num):
-                self.load_to_compute_fifo.write(
+                self.compute_to_store_fifo.write(
                     ChunkPacket(
                         None,
                         command.chunk_size,

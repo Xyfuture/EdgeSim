@@ -2,8 +2,7 @@ from dataclasses import dataclass
 from math import ceil
 from turtledemo.nim import computerzug
 
-from EdgeSim.Commands import ComputeCommand, FFNCommand
-
+from EdgeSim.Commands import ComputeCommand, FFNCommand, AttenComputeCommand, VectorCommand, SoftmaxCommand
 
 
 # FFN 部分的 code gen
@@ -28,6 +27,24 @@ class TaskConfig:
     @property
     def matrix_chunk(self)->tuple[int,int]:
         return self.matrix_size[0]//self.chunk_size,self.matrix_size[1]//self.chunk_size
+
+
+@dataclass
+class AttenTaskConfig:
+    batch_size:int # 对于 prefill阶段比较有意义
+    chunk_size:int
+
+    num_q_head:int
+    num_kv_head:int
+
+    head_size:int # head_dim
+    sequence_length:int
+
+    src_addr:int
+    dst_addr:int
+    temp_s_dst_addr:int
+    temp_softmax_dst_addr:int
+
 
 
 def gen_matrix_command(hardware_config:HardwareConfig,task_config:TaskConfig):
@@ -144,5 +161,79 @@ def gen_ffn_cross_command(hardware_config: HardwareConfig,task_config_a:TaskConf
     return compute_command_list,vector_command_list
 
 
-def gen_attention_command():
-    pass
+def gen_attention_command(hardware_config: HardwareConfig,atten_task_config:AttenTaskConfig):
+    # 首先划分 q * k 的部分
+
+    compute_command_list = []
+    vector_command_list = []
+
+    assert atten_task_config.head_size % atten_task_config.chunk_size == 0
+    num_chunk_per_q_head = atten_task_config.head_size // atten_task_config.chunk_size
+
+    num_chunk_per_s_head = atten_task_config.sequence_length // atten_task_config.chunk_size
+
+
+
+
+    # 直接按照head进行划分
+    for head_id in range(atten_task_config.num_q_head):
+        pim_unit_id = head_id % hardware_config.num_pim_unit
+
+        qk_command = AttenComputeCommand(
+            opcode = 'AttenCompute',
+            batch_size = atten_task_config.batch_size,
+            chunk_size = atten_task_config.chunk_size,
+            unit_id = [pim_unit_id],
+
+            dst =atten_task_config.temp_s_dst_addr + head_id * num_chunk_per_s_head,
+            dst_chunk_num = num_chunk_per_s_head,
+
+            src_dict={pim_unit_id:atten_task_config.src_addr + head_id * num_chunk_per_q_head},
+            src_chunk_num_dict={pim_unit_id:num_chunk_per_q_head},
+
+            running_head = 1,
+            total_head= atten_task_config.num_kv_head,
+
+            head_id= head_id,
+        )
+
+        softmax_command = SoftmaxCommand(
+            opcode = 'softmax',
+
+            batch_size= atten_task_config.batch_size,
+            chunk_size=  atten_task_config.chunk_size,
+
+            chunk_num=num_chunk_per_s_head,
+
+            dst = atten_task_config.temp_softmax_dst_addr + head_id*num_chunk_per_s_head,
+            src = atten_task_config.temp_s_dst_addr + head_id*num_chunk_per_s_head,
+        )
+
+
+        sv_command = AttenComputeCommand(
+            opcode = 'AttenCompute',
+            batch_size= atten_task_config.batch_size,
+            chunk_size=  atten_task_config.chunk_size,
+            unit_id= [pim_unit_id],
+
+            dst = atten_task_config.dst_addr + head_id*num_chunk_per_q_head,
+            dst_chunk_num=  num_chunk_per_q_head,
+
+            src_dict= {pim_unit_id:atten_task_config.temp_softmax_dst_addr + head_id * num_chunk_per_s_head},
+            src_chunk_num_dict = {
+                pim_unit_id:num_chunk_per_s_head
+            },
+
+            running_head = 1,
+            total_head = atten_task_config.num_kv_head,
+            head_id = head_id,
+        )
+
+        compute_command_list.append(qk_command)
+        compute_command_list.append(sv_command)
+
+        vector_command_list.append(softmax_command)
+
+
+    return compute_command_list,vector_command_list
+
