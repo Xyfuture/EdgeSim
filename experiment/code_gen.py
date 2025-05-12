@@ -101,27 +101,31 @@ def gen_matrix_command(hardware_config:HardwareConfig,task_config:TaskConfig):
 
 
 
-def gen_ffn_cross_command(hardware_config: HardwareConfig,task_config_a:TaskConfig,task_config_b:TaskConfig,dst_addr:int):
+def gen_ffn_cross_command(hardware_config: HardwareConfig,
+                          task_config_a:TaskConfig,task_config_b:TaskConfig,
+                          task_config_c:TaskConfig):
     # 首先将 hardware 进行拆分
 
     assert hardware_config.num_pim_unit % 2 == 0
 
     half_num = hardware_config.num_pim_unit//2
-    hard_ware_config_a = HardwareConfig(
+    hardware_config_a = HardwareConfig(
         num_pim_unit = half_num ,
         pim_unit_id_list =  hardware_config.pim_unit_id_list[:half_num],
         pim_unit_sa_size= hardware_config.pim_unit_sa_size
     )
 
-    hard_ware_config_b = HardwareConfig(
+    hardware_config_b = HardwareConfig(
         num_pim_unit = half_num ,
         pim_unit_id_list= hardware_config.pim_unit_id_list[half_num:],
         pim_unit_sa_size= hardware_config.pim_unit_sa_size
     )
 
 
-    command_a = gen_matrix_command(hard_ware_config_a, task_config_a)
-    command_b = gen_matrix_command(hard_ware_config_b, task_config_b)
+    # 这里不是最优的情况, 最优的情况需要将这两个矩阵进行合并
+    command_a = gen_matrix_command(hardware_config_a, task_config_a)
+    command_b = gen_matrix_command(hardware_config_b, task_config_b)
+
 
     assert len(command_a) == len(command_b)
 
@@ -143,7 +147,7 @@ def gen_ffn_cross_command(hardware_config: HardwareConfig,task_config_a:TaskConf
             batch_size=task_config_a.batch_size,
             chunk_size=task_config_a.chunk_size,
 
-            dst = dst_addr,
+            dst = task_config_c.src_addr,
             dst_chunk_num=task_config_a.matrix_chunk[1],
 
             src_chunk_num=task_config_a.matrix_chunk[1],
@@ -156,6 +160,10 @@ def gen_ffn_cross_command(hardware_config: HardwareConfig,task_config_a:TaskConf
 
         )
     ]
+
+    command_c = gen_matrix_command(hardware_config,task_config_c)
+
+    compute_command_list.extend(command_c)
 
 
     return compute_command_list,vector_command_list

@@ -14,7 +14,7 @@ from EdgeSim.Commands import ComputeCommand, AttenComputeCommand
 
 @dataclass
 class PIMEngineConfig:
-    num_pim_unit:int = 16
+    pim_unit_num:int = 16
 
 
 @dataclass
@@ -22,8 +22,12 @@ class PIMUnitConfig:
     sa_rows:int = 4
     sa_cols:int = 128
 
-    rram_bandwidth = 128
+    rram_bandwidth = 128 # 对应下来是 2T 左右的带宽
     dram_bandwidth = 300
+
+    quantization_unit_num = 16
+    dequantization_unit_num = 16
+
 
 
 
@@ -71,7 +75,9 @@ class PIMUnit(SimModule):
             for i in range(command.src_chunk_num_dict[self.unit_id]):
                 chunk_packet = self.load_fifo.read()
 
-                SimModule.wait_time(SimTime(1))
+                latency = command.chunk_size // self.pim_unit_config.quantization_unit_num
+
+                SimModule.wait_time(SimTime(latency))
 
                 self.quantize_to_compute_fifo.write(
                     ChunkPacket(
@@ -108,6 +114,9 @@ class PIMUnit(SimModule):
 
                         latency = self.calc_execution_time(input_size,matrix_size,memory_bandwidth,last_time)
 
+                        # if self.unit_id == 0:
+                        #     print(f'PIM Unit {self.unit_id} compute_start_time {SimSession.sim_time} - compute_latency {latency}')
+
                         SimModule.wait_time(SimTime(latency))
 
                     # 运算完一个块
@@ -120,7 +129,7 @@ class PIMUnit(SimModule):
                         )
                     )
 
-                    print(f"PIM Unit {self.unit_id} compute at dst{i}")
+                    # print(f"PIM Unit {self.unit_id} compute at dst{i}")
             elif isinstance(command, AttenComputeCommand):
                 # 针对 attention 计算的部分
 
@@ -154,6 +163,8 @@ class PIMUnit(SimModule):
 
                     print(f"PIM Unit {self.unit_id} compute at dst{i}")
 
+            if self.unit_id == 0 :
+                print(f"PIM Unit {self.unit_id} finish command at time {SimSession.sim_time}")
 
 
     def dequantize_engine(self):
@@ -163,7 +174,9 @@ class PIMUnit(SimModule):
             for i in range(command.dst_chunk_num):
                 chunk_packet = self.compute_to_dequantize_fifo.read()
 
-                SimModule.wait_time(SimTime(1))
+                latency = command.chunk_size // self.pim_unit_config.quantization_unit_num
+
+                SimModule.wait_time(SimTime(latency))
 
                 self.store_fifo.write(
                     ChunkPacket(
@@ -224,7 +237,7 @@ class PIMEngine(SimModule):
 
         self.pim_engine_config = PIMEngineConfig()
 
-        for i in range(self.pim_engine_config.num_pim_unit):
+        for i in range(self.pim_engine_config.pim_unit_num):
             self.pim_unit_list.append(PIMUnit(i))
             self.pim_unit_load_semaphore_list.append(SimSemaphore(1))
             self.pim_unit_store_semaphore_list.append(SimSemaphore(1))
@@ -242,7 +255,7 @@ class PIMEngine(SimModule):
         self.load_engine_command_queue = FIFO(command_size,command_size,command_list)
         self.store_engine_command_queue = FIFO(command_size,command_size,command_list)
 
-        all_pim_unit_command_list = [[] for i in range(self.pim_engine_config.num_pim_unit)]
+        all_pim_unit_command_list = [[] for i in range(self.pim_engine_config.pim_unit_num)]
 
         for command in command_list:
             for unit_id in command.unit_id:

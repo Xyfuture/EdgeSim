@@ -47,8 +47,8 @@ def test_ffn_code_gen():
                                      pim_unit_sa_size=(4, 128))
     task_config_a = TaskConfig(matrix_size=(3584, 18944), batch_size=1, chunk_size=128, src_addr=1000, dst_addr=2000)
     task_config_b = TaskConfig(matrix_size=(3584, 18944), batch_size=1, chunk_size=128, src_addr=3000, dst_addr=4000)
-
-    compute_command_list,vector_command_list = gen_ffn_cross_command(hardware_config,task_config_a,task_config_b,dst_addr=5000)
+    task_config_c = TaskConfig(matrix_size=(18944,3584), batch_size=1, chunk_size=128, src_addr=5000,dst_addr=6000)
+    compute_command_list,vector_command_list = gen_ffn_cross_command(hardware_config,task_config_a,task_config_b,task_config_c)
 
     chiplet.load_commands(compute_command_list,vector_command_list)
 

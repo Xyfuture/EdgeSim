@@ -7,7 +7,7 @@ from Desim.module.FIFO import FIFO
 
 from EdgeSim.Commands import ComputeCommand, VectorCommand
 from EdgeSim.PIMEngine import PIMEngine
-from EdgeSim.VectorEngine import VectorEngine
+from EdgeSim.VectorEngine import VectorEngine, VectorEngineConfig
 
 
 class EdgeChiplet(SimModule):
@@ -18,7 +18,7 @@ class EdgeChiplet(SimModule):
         self.l3_memory = ChunkMemory()
 
         self.pim_engine = PIMEngine()
-        self.vector_engine = VectorEngine()
+        self.vector_engine = VectorEngine(VectorEngineConfig())
 
 
     def load_commands(self,compute_command_list:list[ComputeCommand],vector_command_list:list[VectorCommand]):

@@ -10,14 +10,18 @@ from EdgeSim.Commands import FFNCommand, SoftmaxCommand, VectorCommand
 
 @dataclass
 class VectorEngineConfig:
-    pass
+    softmax_unit_num:int = 16
+    ffn_unit_num:int = 16
+
+
 
 
 class FFNEngine(SimModule):
     def __init__(self):
         super().__init__()
 
-        self.external_l3_memory:ChunkMemory = None
+        self.vector_engine_config:Optional[VectorEngineConfig] = None
+        self.external_l3_memory:Optional[ChunkMemory] = None
 
 
         self.load_to_activation_fifo = FIFO(100)
@@ -147,6 +151,9 @@ class FFNEngine(SimModule):
                     data_1 = self.activation_to_mul_fifo.read()
                     data_2 = self.load_to_mul_fifo.read()
 
+                    latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+
+                    SimModule.wait_time(SimTime(latency))
                     self.mul_to_store_fifo.write(
                         ChunkPacket(
                             None,
@@ -155,12 +162,15 @@ class FFNEngine(SimModule):
                             2
                         )
                     )
-                    SimModule.wait_time(SimTime(1))
+
 
             else:
                 # 直接将 activation 的结果传输到 memory 中
                 for i in range(command.src_chunk_num):
                     data = self.activation_to_mul_fifo.read()
+
+                    latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+                    SimModule.wait_time(SimTime(latency))
 
                     self.mul_to_store_fifo.write(
                         ChunkPacket(
@@ -171,7 +181,6 @@ class FFNEngine(SimModule):
                         )
                     )
 
-                    SimModule.wait_time(SimTime(1))
 
 
     def activation_engine(self):
@@ -186,6 +195,10 @@ class FFNEngine(SimModule):
             for i in range(command.src_chunk_num):
                 data = self.load_to_activation_fifo.read()
 
+                latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+
+                SimModule.wait_time(SimTime(latency))
+
                 self.activation_to_mul_fifo.write(
                     ChunkPacket(
                         None,
@@ -195,16 +208,18 @@ class FFNEngine(SimModule):
                     )
                 )
 
-                SimModule.wait_time(SimTime(1))
 
-    def config_connection(self,l3_memory:ChunkMemory):
+    def config_connection(self,l3_memory:ChunkMemory,vector_engine_config:VectorEngineConfig):
         self.external_l3_memory = l3_memory
+
+        self.vector_engine_config = vector_engine_config
 
 
 class SoftmaxEngine(SimModule):
     def __init__(self):
         super().__init__()
 
+        self.vector_engine_config:Optional[VectorEngineConfig] = None
         self.external_l3_memory:Optional[ChunkMemory] = None
 
 
@@ -268,7 +283,10 @@ class SoftmaxEngine(SimModule):
             for i in range(command.chunk_num):
                 data = self.load_to_compute_fifo.read()
 
-            SimModule.wait_time(SimTime(1))
+
+            # 这里假设是收到所有的数据
+            latency = command.chunk_num * command.chunk_size  // self.vector_engine_config.softmax_unit_num
+            SimModule.wait_time(SimTime(latency))
 
             for i in range(command.chunk_num):
                 self.compute_to_store_fifo.write(
@@ -302,16 +320,19 @@ class SoftmaxEngine(SimModule):
 
                 SimModule.wait_time(SimTime(1))
 
-    def config_connection(self,l3_memory:ChunkMemory):
+    def config_connection(self,l3_memory:ChunkMemory,vector_engine_config:VectorEngineConfig):
         self.external_l3_memory = l3_memory
+
+        self.vector_engine_config = VectorEngineConfig
 
 
 
 class VectorEngine(SimModule):
 
-    def __init__(self):
+    def __init__(self,vector_engine_config:VectorEngineConfig):
         super().__init__()
 
+        self.vector_engine_config:VectorEngineConfig = vector_engine_config
 
         self.command_queue:FIFO[VectorCommand] = FIFO(100)
 
@@ -348,7 +369,7 @@ class VectorEngine(SimModule):
 
     def config_connection(self,l3_memory:ChunkMemory):
 
-        self.softmax_engine.config_connection(l3_memory)
-        self.ffn_engine.config_connection(l3_memory)
+        self.softmax_engine.config_connection(l3_memory,self.vector_engine_config)
+        self.ffn_engine.config_connection(l3_memory,self.vector_engine_config)
 
 
