@@ -213,6 +213,11 @@ class ModelRuner:
         self.vector_command_list.extend(atten_vector_command_list)
         self.vector_command_list.extend(ffn_vector_command_list)
 
+    def get_all_reduce_sync_latency(self)->int:
+        # 计算进行 all reduce 的延迟
+        # 包括Norm的延迟和残差的延迟
+
+        pass
 
 
     def run_sim(self):
@@ -233,9 +238,3 @@ class ModelRuner:
         print(f"Simulation finished at {SimSession.sim_time}")
         print(f"L3 Memory: {chiplet.l3_memory.memory_data}")
 
-# def run_qwen_model(model_config:ModelConfig):
-#
-#     # 先计算每一层的latency, 然后计算整体的延迟
-#
-#
-#     qkv_proj_shape = ()
