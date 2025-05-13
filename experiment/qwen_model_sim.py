@@ -328,9 +328,31 @@ class ModelRuner:
         last_sim_time = 0
 
         # QKV Proj
-        chiplet.load_commands(compute_command_dict['qkv_proj'],vector_command_dict['qkv_proj'])
+        chiplet.load_commands(compute_command_dict['qkv_proj'],[])
         SimSession.scheduler.run()
         cur_sim_time = SimSession.sim_time.cycle
+        print(f"QKV Proj: {cur_sim_time - last_sim_time}")
+        last_sim_time = cur_sim_time
+
+        chiplet.load_commands(compute_command_dict['atten'],vector_command_dict['atten'])
+        SimSession.scheduler.run()
+        cur_sim_time = SimSession.sim_time.cycle
+        print(f"Attention: {cur_sim_time - last_sim_time}")
+        last_sim_time = cur_sim_time
+
+        chiplet.load_commands(compute_command_dict['o_proj'],[])
+        SimSession.scheduler.run()
+        cur_sim_time = SimSession.sim_time.cycle
+        print(f'O Proj: {cur_sim_time - last_sim_time}')
+        last_sim_time = cur_sim_time
+
+        chiplet.load_commands(compute_command_dict['ffn'],vector_command_dict['ffn'])
+        SimSession.scheduler.run()
+        cur_sim_time = SimSession.sim_time.cycle
+        print(f'FFN: {cur_sim_time - last_sim_time}')
+        last_sim_time = cur_sim_time
+
+        print(f'total {last_sim_time}')
 
 
 

@@ -34,8 +34,10 @@ if __name__ == '__main__':
 
     model_runner = ModelRuner(model_config,sequence_config,hardware_config,tp_size=tp_config[model_name],chunk_size=128)
 
-    # SimSession.init()
+
+    model_runner.run_break_down_sim()
+
+
     layer_latency = model_runner.get_layer_latency()
     model_latency = model_runner.get_model_latency()
     print(f'layer latency: {layer_latency}  model_latency: {model_latency}')
-    # SimSession.scheduler.run()
