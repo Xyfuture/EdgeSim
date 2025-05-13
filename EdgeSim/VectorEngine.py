@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from Desim.Core import SimModule, SimTime
+from Desim.Core import SimModule, SimTime, SimSession
 from Desim.memory.Memory import ChunkMemory, ChunkMemoryPort, ChunkPacket
 from Desim.module.FIFO import FIFO
 
@@ -181,6 +181,8 @@ class FFNEngine(SimModule):
                         )
                     )
 
+            # print(f"FFN Engine: finish command at {SimSession.sim_time}")
+
 
 
     def activation_engine(self):
@@ -297,6 +299,7 @@ class SoftmaxEngine(SimModule):
                         2
                     )
                 )
+            # print(f"Softmax Engine: finish command at {SimSession.sim_time}")
 
     def store_engine(self):
         l3_memory_write_port = ChunkMemoryPort()

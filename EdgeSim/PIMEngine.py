@@ -96,7 +96,7 @@ class PIMUnit(SimModule):
 
             # 这里需要进行一个拆分, compute 和 atten compute 需要拆分开
 
-            if isinstance(command,ComputeCommand):
+            if type(command) == ComputeCommand:
                 for i in range(command.dst_chunk_num):
                     for j in range(command.src_chunk_num_dict[self.unit_id]):
                         if i == 0 :
@@ -130,7 +130,7 @@ class PIMUnit(SimModule):
                     )
 
                     # print(f"PIM Unit {self.unit_id} compute at dst{i}")
-            elif isinstance(command, AttenComputeCommand):
+            elif type(command) == AttenComputeCommand and isinstance(command,AttenComputeCommand): # 为了type hint
                 # 针对 attention 计算的部分
 
                 for i in range(command.dst_chunk_num):
@@ -161,10 +161,10 @@ class PIMUnit(SimModule):
                         )
                     )
 
-                    print(f"PIM Unit {self.unit_id} compute at dst{i}")
+                    # print(f"PIM Unit {self.unit_id} compute at dst{i}")
 
-            if self.unit_id == 0 :
-                print(f"PIM Unit {self.unit_id} finish command at time {SimSession.sim_time}")
+            # if self.unit_id == 0 :
+            #     print(f"PIM Unit {self.unit_id} finish command at time {SimSession.sim_time} - dst_addr {command.dst}")
 
 
     def dequantize_engine(self):
