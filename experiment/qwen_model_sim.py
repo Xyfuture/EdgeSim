@@ -36,6 +36,13 @@ class SequenceConfig(BaseModel):
     def total_length(self)->int:
         return self.prefill_length + self.decoding_length
 
+
+class NetworkConfig(BaseModel):
+    latency:int = 100 # ns
+    bandwidth:int = 4 # bytes/ns -- GB/s
+
+
+
 def load_predefined_model_config(model_name,path:Optional[str]='experiment/')->ModelConfig:
     if path is None:
         current_file_path = os.path.abspath(__file__)
@@ -55,10 +62,12 @@ def load_predefined_model_config(model_name,path:Optional[str]='experiment/')->M
 
 
 class ModelRuner:
-    def __init__(self,model_config:ModelConfig,sequence_config:SequenceConfig,hardware_config:HardwareConfig,tp_size:int=1,chunk_size:int=128):
+    def __init__(self,model_config:ModelConfig,sequence_config:SequenceConfig,hardware_config:HardwareConfig,
+                    network_config:NetworkConfig,tp_size:int=1,chunk_size:int=128):
         self.lm_config = model_config
         self.sequence_config = sequence_config
         self.hardware_config = hardware_config
+        self.network_config = network_config
 
         self.chunk_size=chunk_size
         self.tp_size = tp_size
@@ -232,7 +241,19 @@ class ModelRuner:
         # 计算进行 all reduce 的延迟
         # 包括Norm的延迟和残差的延迟
 
-        return 0
+        # all reduce 部分的通信延迟
+
+        #  bytes  -- fp16
+        data_size_per_round = self.lm_config.hidden_size * self.sequence_config.batch_size * 2  // self.tp_size
+        rounds = 2*(self.tp_size-1)
+        # reduce_scatter
+        reduce_scatter_latency = self.network_config.latency + rounds*(data_size_per_round//self.network_config.bandwidth)
+
+        normalization_latency = self.lm_config.hidden_size * self.sequence_config.batch_size  // 32
+
+        total_latency = reduce_scatter_latency + normalization_latency
+
+        return total_latency
 
     def get_layer_latency(self)->int:
         latency = self.run_sim()

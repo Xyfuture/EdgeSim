@@ -4,6 +4,7 @@ from typing import Optional
 from Desim.Core import SimModule, SimTime, SimSession
 from Desim.memory.Memory import ChunkMemory, ChunkMemoryPort, ChunkPacket
 from Desim.module.FIFO import FIFO
+from pywin.scintilla.view import command_reflectors
 
 from EdgeSim.Commands import FFNCommand, SoftmaxCommand, VectorCommand
 
@@ -151,7 +152,7 @@ class FFNEngine(SimModule):
                     data_1 = self.activation_to_mul_fifo.read()
                     data_2 = self.load_to_mul_fifo.read()
 
-                    latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+                    latency = command.batch_size * command.chunk_size // self.vector_engine_config.ffn_unit_num
 
                     SimModule.wait_time(SimTime(latency))
                     self.mul_to_store_fifo.write(
@@ -169,7 +170,7 @@ class FFNEngine(SimModule):
                 for i in range(command.src_chunk_num):
                     data = self.activation_to_mul_fifo.read()
 
-                    latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+                    latency = command.batch_size * command.chunk_size // self.vector_engine_config.ffn_unit_num
                     SimModule.wait_time(SimTime(latency))
 
                     self.mul_to_store_fifo.write(
@@ -197,7 +198,7 @@ class FFNEngine(SimModule):
             for i in range(command.src_chunk_num):
                 data = self.load_to_activation_fifo.read()
 
-                latency = command.chunk_size // self.vector_engine_config.ffn_unit_num
+                latency = command.batch_size * command.chunk_size // self.vector_engine_config.ffn_unit_num
 
                 SimModule.wait_time(SimTime(latency))
 
@@ -287,7 +288,7 @@ class SoftmaxEngine(SimModule):
 
 
             # 这里假设是收到所有的数据
-            latency = command.chunk_num * command.chunk_size  // self.vector_engine_config.softmax_unit_num
+            latency = command.batch_size * command.chunk_num * command.chunk_size  // self.vector_engine_config.softmax_unit_num
             SimModule.wait_time(SimTime(latency))
 
             for i in range(command.chunk_num):

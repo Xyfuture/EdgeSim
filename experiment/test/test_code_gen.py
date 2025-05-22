@@ -43,11 +43,13 @@ def test_ffn_code_gen():
 
     chiplet = EdgeChiplet()
 
+    batch_size = 1
+
     hardware_config = HardwareConfig(num_pim_unit=16, pim_unit_id_list=[i for i in range(16)],
                                      pim_unit_sa_size=(4, 128))
-    task_config_a = TaskConfig(matrix_size=(3584, 18944), batch_size=1, chunk_size=128, src_addr=1000, dst_addr=2000)
-    task_config_b = TaskConfig(matrix_size=(3584, 18944), batch_size=1, chunk_size=128, src_addr=3000, dst_addr=4000)
-    task_config_c = TaskConfig(matrix_size=(18944,3584), batch_size=1, chunk_size=128, src_addr=5000,dst_addr=6000)
+    task_config_a = TaskConfig(matrix_size=(3584, 18944), batch_size=batch_size, chunk_size=128, src_addr=1000, dst_addr=2000)
+    task_config_b = TaskConfig(matrix_size=(3584, 18944), batch_size=batch_size, chunk_size=128, src_addr=3000, dst_addr=4000)
+    task_config_c = TaskConfig(matrix_size=(18944,3584), batch_size=batch_size, chunk_size=128, src_addr=5000,dst_addr=6000)
     compute_command_list,vector_command_list = gen_ffn_cross_command(hardware_config,task_config_a,task_config_b,task_config_c)
 
     chiplet.load_commands(compute_command_list,vector_command_list)
@@ -136,6 +138,6 @@ def test_atten_code_gen():
 if __name__ == "__main__":
     # test_matrix_code_gen()
 
-    # test_ffn_code_gen()
+    test_ffn_code_gen()
 
-    test_atten_code_gen()
+    # test_atten_code_gen()
